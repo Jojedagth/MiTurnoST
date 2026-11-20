@@ -1,0 +1,190 @@
+{
+  "fecha": "2026-11-20T00:06:15.423Z",
+  "aprobadas": 26,
+  "total": 26,
+  "tiempoCargaMs": 35,
+  "casos": [
+    {
+      "id": "P-01",
+      "nombre": "Rechaza correo externo a Santo Tomás",
+      "tipo": "Seguridad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-02",
+      "nombre": "Rechaza estudiante sin matrícula activa",
+      "tipo": "Seguridad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-03",
+      "nombre": "Exige contraseña en el formulario de ingreso",
+      "tipo": "Seguridad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-04",
+      "nombre": "Separa roles: el mesón no ve Administración",
+      "tipo": "Seguridad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-05",
+      "nombre": "El rol administración ve Administración",
+      "tipo": "Funcional",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-06",
+      "nombre": "Reserva un box libre por 1 hora",
+      "tipo": "Funcional",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-07",
+      "nombre": "Bloquea más de 2 h diarias de box",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-08",
+      "nombre": "Impide reservar un bloque ya tomado por otra persona",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-09",
+      "nombre": "Impide dos recursos del mismo tipo a la misma hora",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-10",
+      "nombre": "Permite solo una calculadora por día",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-11",
+      "nombre": "Cancela antes del inicio y libera el recurso",
+      "tipo": "Funcional",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-12",
+      "nombre": "No permite cancelar después de la hora de inicio",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-13",
+      "nombre": "Libera automáticamente si no se retira en 15 min",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-14",
+      "nombre": "No libera antes de cumplir la tolerancia (minuto 14)",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-15",
+      "nombre": "Rechaza entrega con código incorrecto",
+      "tipo": "Funcional",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-16",
+      "nombre": "Entrega con código y el recurso pasa a Ocupado",
+      "tipo": "Integración",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-17",
+      "nombre": "Entrega validando con la matrícula",
+      "tipo": "Funcional",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-18",
+      "nombre": "Devolución deja el recurso libre",
+      "tipo": "Integración",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-19",
+      "nombre": "Recurso en mantención no se puede reservar",
+      "tipo": "Regla de negocio",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-20",
+      "nombre": "Nuevo tipo de recurso aparece sin cambiar código",
+      "tipo": "Escalabilidad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-21",
+      "nombre": "Auditoría registra eventos y no permite editarlos",
+      "tipo": "Trazabilidad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-22",
+      "nombre": "Las reservas sobreviven a recargar la página",
+      "tipo": "Persistencia",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-23",
+      "nombre": "Texto ingresado no ejecuta código (XSS)",
+      "tipo": "Seguridad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-24",
+      "nombre": "Sin desborde horizontal en pantalla de teléfono (390 px)",
+      "tipo": "Usabilidad",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-25",
+      "nombre": "Carga inicial bajo 3 segundos",
+      "tipo": "Rendimiento",
+      "estado": "Aprobada",
+      "obs": ""
+    },
+    {
+      "id": "P-26",
+      "nombre": "Sin errores de JavaScript durante las pruebas",
+      "tipo": "Calidad",
+      "estado": "Aprobada",
+      "obs": ""
+    }
+  ]
+}

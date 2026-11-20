@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MiTurno ST · Prototipo v2</title>
+<meta name="description" content="Prototipo funcional de MiTurno ST: consulta y reserva de recursos no bibliográficos de la Biblioteca Santo Tomás, sede La Serena.">
+<style>
+/* =====================================================================
+   MiTurno ST · Prototipo v2
+   Un solo archivo (HTML + CSS + JS), sin dependencias externas.
+   Secciones del código:
+     1. Estilos (variables de color, componentes, modo oscuro)
+     2. Configuración y datos de demostración
+     3. Persistencia (localStorage)
+     4. Reglas de negocio (funciones puras, se pueden probar por separado)
+     5. Acciones (modifican el estado y escriben el registro de auditoría)
+     6. Vistas (login, disponibilidad, mis reservas, mesón, administración)
+     7. Eventos y arranque
+   ===================================================================== */
+:root{
+  --bg:#F3F6F5; --surface:#FFFFFF; --surface2:#F7FAF9; --ink:#132320; --muted:#566864; --line:#D9E3E0;
+  --brand:#0B5D4B; --brand-2:#0E7A62; --brand-ink:#FFFFFF; --brand-soft:#DDEFEA; --accent:#C8A24A;
+  --free:#1B8A4A; --free-bg:#DFF3E6; --held:#946000; --held-bg:#FBEBC8; --busy:#B3261E; --busy-bg:#FBE3E0;
+  --neutral:#4F5D6B; --neutral-bg:#E4E9EE; --info:#1F4E8C; --info-bg:#E2ECF8; --bad:#B42318; --bad-bg:#FCE4E1;
+  --radius:14px; --shadow:0 1px 2px rgba(19,35,32,.06),0 10px 30px rgba(19,35,32,.07);
+  --f:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0D1614; --surface:#14211E; --surface2:#192A26; --ink:#E6F0ED; --muted:#9DB1AC; --line:#26403A;
+  --brand:#4CC3A2; --brand-2:#6FD6B8; --brand-ink:#04241C; --brand-soft:#123A31; --accent:#E2C36F;
+  --free:#5BD68A; --free-bg:#123A24; --held:#F0B24B; --held-bg:#3A2D10; --busy:#FF8F80; --busy-bg:#42201C;
+  --neutral:#AAB7C5; --neutral-bg:#24323A; --info:#8DB6F0; --info-bg:#172A44; --bad:#FF8A7A; --bad-bg:#3D1A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;letter-spacing:-.015em;line-height:1.2}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left))}
+.tn{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .sub{font-size:12.5px;color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center}
+.sp{flex:1}
+
+/* Botones y etiquetas */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px;transition:background .15s}
+.btn:hover{background:var(--surface2)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.pri:hover{background:var(--brand-2)}
+.btn.sm{padding:6px 11px;font-size:13px;border-radius:8px}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.st-libre{background:var(--free-bg);color:var(--free)}
+.st-reservado{background:var(--held-bg);color:var(--held)}
+.st-ocupado{background:var(--busy-bg);color:var(--busy)}
+.st-mantencion,.st-bloqueado,.st-neutral{background:var(--neutral-bg);color:var(--neutral)}
+.st-info{background:var(--info-bg);color:var(--info)}
+.st-bad{background:var(--bad-bg);color:var(--bad)}
+.tag{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.pad{padding:18px}
+.note{padding:12px 14px;border-radius:12px;background:var(--info-bg);color:var(--info);font-size:13.5px}
+
+/* Barra superior */
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.bar{display:flex;align-items:center;gap:18px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px}
+.brand small{display:block;font-weight:500;font-size:11.5px;color:var(--muted)}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0}
+nav.tabs button{background:none;border:0;padding:9px 14px;border-radius:10px;color:var(--muted);font-weight:600;white-space:nowrap}
+nav.tabs button[aria-current="page"]{background:var(--brand-soft);color:var(--brand)}
+.badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:9px;background:var(--brand);color:var(--brand-ink);font-size:11px;line-height:18px;margin-left:6px}
+.who{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.who b{color:var(--ink)}
+.demo{background:var(--surface2);border-bottom:1px solid var(--line);font-size:13px}
+.demo .wrap{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;padding-block:8px}
+.clock{font-weight:800;font-size:15px;color:var(--ink)}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--free);font-weight:700}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--free);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.live::before{animation:none}}
+
+/* Contenido */
+main{padding-block:26px 60px;display:flex;flex-direction:column;gap:20px}
+.page-h{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 20px;flex-wrap:wrap}
+.page-h h2{font-size:26px}
+.page-h p{color:var(--muted);max-width:64ch;margin-top:4px}
+.grid{display:grid;gap:14px}
+.g-types{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.g-res{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.g-2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.sum{padding:16px;display:flex;flex-direction:column;gap:10px;text-align:left}
+.sum[aria-pressed="true"]{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.sum .n{font-size:30px;font-weight:800;line-height:1}
+.sum .n span{font-size:14px;color:var(--muted);font-weight:500}
+.ico{width:38px;height:38px;border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;flex:none}
+.ico svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.meter{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--neutral-bg);gap:1px}
+.meter .f{background:var(--free)}.meter .h{background:var(--held)}.meter .b{background:var(--busy)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 14px;font-weight:600;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px}
+.rcard{padding:16px;display:flex;flex-direction:column;gap:12px}
+.rcard h4{font-size:16px}
+.blocks{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.blk{border:1px solid transparent;border-radius:8px;padding:7px 0;font-size:12.5px;font-weight:700;text-align:center}
+.blk.st-libre{border-color:var(--free)}
+.blk.st-libre:not([disabled]):hover{background:var(--free);color:var(--surface)}
+.blk.st-ocupado{background:repeating-linear-gradient(135deg,var(--busy-bg) 0 5px,transparent 5px 10px);border-color:var(--busy)}
+.blk.st-bloqueado,.blk.st-mantencion{background:repeating-linear-gradient(135deg,var(--neutral-bg) 0 5px,transparent 5px 10px)}
+.blk.pasado{background:none;color:var(--muted);opacity:.5;border:1px dashed var(--line)}
+.blk[disabled]{cursor:default}
+.foot{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.list{display:flex;flex-direction:column}
+.item{display:flex;gap:14px;align-items:center;padding:14px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.item:first-child{border-top:0}
+.item .main{flex:1;min-width:190px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 14px;border-top:1px solid var(--line);vertical-align:middle}
+tr:first-child td{border-top:0}
+td input[type=number]{width:72px;padding:6px 8px}
+.quota{padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.bar2{height:8px;border-radius:4px;background:var(--neutral-bg);overflow:hidden}
+.bar2 i{display:block;height:100%;background:var(--brand)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.stat{padding:14px 16px}.stat .n{font-size:28px;font-weight:800;margin-top:4px}
+.hbar{display:grid;grid-template-columns:140px 1fr 40px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.hbar .t{height:14px;background:var(--neutral-bg);border-radius:4px;overflow:hidden}
+.hbar .t i{display:block;height:100%;background:var(--brand)}
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end}
+.form-row label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--muted)}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+
+/* Login */
+.login{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding-block:44px}
+.login h1{font-size:clamp(30px,4.6vw,46px);line-height:1.05}
+.hero-band{height:6px;width:90px;border-radius:3px;background:linear-gradient(90deg,var(--brand),var(--accent));margin:24px 0 18px}
+.lead{font-size:17px;color:var(--muted);max-width:48ch}
+.vals{display:grid;gap:14px;margin:26px 0 0;padding:0;list-style:none}
+.vals li{display:flex;gap:12px}
+.vals .k{flex:none;width:30px;height:30px;border-radius:9px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:800;font-size:13px}
+.vals b{display:block}
+.sso{padding:26px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.sso label{font-size:13px;font-weight:700;display:flex;flex-direction:column;gap:6px}
+.err{color:var(--bad);font-size:13px;min-height:18px}
+.demo-acc{display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.demo-acc h4{grid-column:1/-1;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+
+/* Modal y avisos */
+.scrim{position:fixed;inset:0;background:rgba(6,14,12,.55);display:grid;place-items:center;padding:16px;z-index:50}
+.modal{background:var(--surface);border-radius:16px;padding:22px;max-width:450px;width:100%;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow);max-height:92vh;overflow:auto}
+.modal h3{font-size:20px}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:14px}
+dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-weight:600}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px}
+.seg button[aria-pressed="true"]{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700}
+.rules{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
+.row-btn{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.ticket{border:2px dashed var(--brand);border-radius:12px;padding:14px;text-align:center;background:var(--brand-soft)}
+.ticket .code{font-size:32px;font-weight:800;letter-spacing:.06em;color:var(--brand)}
+#toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:60;width:max-content;max-width:calc(100% - 32px)}
+.toast{background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:12px;font-weight:600;box-shadow:var(--shadow)}
+footer.fine{border-top:1px solid var(--line);padding-block:18px;font-size:12px;color:var(--muted)}
+@media (max-width:820px){
+  .login{grid-template-columns:1fr;padding-block:24px;gap:26px}
+  .page-h h2{font-size:22px}
+  .hbar{grid-template-columns:100px 1fr 34px}
+  .who span.name{display:none}
+  .bar{gap:10px}
+  nav.tabs{order:3;flex-basis:100%}
+  .who{margin-left:auto}
+  .brand small{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   2. CONFIGURACIÓN Y DATOS DE DEMOSTRACIÓN
+   ===================================================================== */
+const VERSION = '2.0';
+const STORE_KEY = 'miturnost.v2';
+const ESTADOS_ACTIVOS = ['reservada', 'en_uso'];
+const ETIQUETA = {reservada:'Reservada', en_uso:'En uso', completada:'Devuelta', cancelada:'Cancelada', expirada:'Expirada (no retiró)'};
+const CLASE = {reservada:'st-info', en_uso:'st-reservado', completada:'st-libre', cancelada:'st-neutral', expirada:'st-bad'};
+
+// Cuentas de demostración (simulan el SSO institucional).
+const CUENTAS_DEMO = [
+  {correo:'camila.rojas@alumnos.santotomas.cl', etiqueta:'Estudiante'},
+  {correo:'meson.biblioteca@santotomas.cl', etiqueta:'Personal de mesón'},
+  {correo:'admin.biblioteca@santotomas.cl', etiqueta:'Administración'},
+  {correo:'inactivo.demo@alumnos.santotomas.cl', etiqueta:'Matrícula no vigente'}
+];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hhmm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+
+/** Matrícula ficticia y estable a partir del correo (solo para la demo). */
+function matricula(correo){ let h = 7; for (const c of correo) h = (h * 31 + c.charCodeAt(0)) % 79999999; return String(20000000 + h); }
+function nombreDesdeCorreo(correo){
+  return correo.split('@')[0].split(/[._-]/).filter(x => x && !/^\d+$/.test(x)).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+function correoDesdeNombre(n){ return n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(' ').join('.') + '@alumnos.santotomas.cl'; }
+
+/** Estado inicial: inventario, parámetros y algunas reservas para que la demo no parta vacía. */
+function estadoInicial(){
+  const st = {
+    version: VERSION, ahora: 480, seq: 1, codigo: 50000,
+    params: {tolerancia: 15, apertura: 480, cierre: 1200},
+    tipos: {
+      box:  {nombre:'Box de estudio', plural:'Boxes de estudio', modalidad:'hora', maximo:2, prefijo:'Box', icono:'box'},
+      calc: {nombre:'Calculadora',    plural:'Calculadoras',     modalidad:'dia',  maximo:1, prefijo:'Calculadora', icono:'calc'},
+      tab:  {nombre:'Tablet',         plural:'Tablets',          modalidad:'dia',  maximo:1, prefijo:'Tablet', icono:'tab'}
+    },
+    recursos: [], reservas: [], eventos: [], avisos: []
+  };
+  const agregar = (tipo, n, lugar) => { for (let i = 1; i <= n; i++) st.recursos.push({id: st.seq++, tipo, nombre: `${st.tipos[tipo].prefijo} ${i}`, lugar: lugar(i), mantencion: false}); };
+  agregar('box', 6, i => `Piso ${i <= 3 ? 1 : 2} · ${i % 2 ? 4 : 6} personas`);
+  agregar('calc', 8, () => 'Retiro en mesón');
+  agregar('tab', 6, () => 'Retiro en mesón');
+
+  const reservar = (rec, nombre, hi, hf, extra = {}) => {
+    const r = st.recursos.find(x => x.nombre === rec);
+    const b = Object.assign({id: st.seq++, recurso: r.id, correo: correoDesdeNombre(nombre), nombre, inicio: hi * 60, fin: hf * 60, estado: 'reservada', codigo: nuevoCodigo(st)}, extra);
+    st.reservas.push(b);
+    registrar(st, 'Reserva creada', nombre, r.nombre, `${hhmm(b.inicio)}–${hhmm(b.fin)}`);
+    return b;
+  };
+  reservar('Box 1', 'Ignacia Muñoz', 9, 11); reservar('Box 3', 'Valentina Soto', 10, 12);
+  reservar('Calculadora 1', 'Joaquín Vera', 9, 20); reservar('Calculadora 2', 'Sofía Araya', 9, 20);
+  reservar('Tablet 3', 'Matías Pizarro', 9, 20);
+  st.ahora = 560;
+  st.reservas.forEach(b => { b.estado = 'en_uso'; registrar(st, 'Entrega registrada en mesón', b.nombre, recurso(st, b.recurso).nombre, 'Validada con código'); });
+  reservar('Box 2', 'Diego Fuentes', 11, 12); reservar('Box 4', 'Matías Pizarro', 12, 13);
+  reservar('Box 6', 'Francisca Díaz', 10, 11); reservar('Calculadora 3', 'Tomás Núñez', 11, 20);
+  reservar('Tablet 2', 'Valentina Soto', 11, 20);
+  st.recursos.find(r => r.nombre === 'Tablet 6').mantencion = true;
+  registrar(st, 'Recurso en mantención', 'Administración', 'Tablet 6', 'Pantalla dañada');
+  st.ahora = 610; // 10:10
+  vencerReservas(st);
+  return st;
+}
+function nuevoCodigo(st){ st.codigo += 37; return 'MT-' + st.codigo.toString(36).toUpperCase(); }
+
+/* =====================================================================
+   3. PERSISTENCIA (el estado sobrevive a recargar la página)
+   ===================================================================== */
+const Almacen = {
+  cargar(){ try { const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.version === VERSION ? s : null; } catch(e){ return null; } },
+  guardar(st){ try { localStorage.setItem(STORE_KEY, JSON.stringify(st)); } catch(e){} },
+  borrar(){ try { localStorage.removeItem(STORE_KEY); } catch(e){} }
+};
+
+/* =====================================================================
+   4. REGLAS DE NEGOCIO (no tocan la pantalla)
+   ===================================================================== */
+const recurso = (st, id) => st.recursos.find(r => r.id === id);
+const tipoDe = (st, r) => st.tipos[r.tipo];
+const activa = b => ESTADOS_ACTIVOS.includes(b.estado);
+
+/** Reserva activa que cubre el minuto t del recurso, si existe. */
+function reservaEn(st, idRec, t){ return st.reservas.find(b => b.recurso === idRec && activa(b) && b.inicio <= t && t < b.fin); }
+/** ¿Hay alguna reserva activa del recurso que se cruce con [ini, fin)? */
+function hayCruce(st, idRec, ini, fin){ return st.reservas.some(b => b.recurso === idRec && activa(b) && b.inicio < fin && ini < b.fin); }
+
+/** Estado de un bloque de una hora (h = hora entera) de un recurso. */
+function estadoBloque(st, r, h){
+  const t = h * 60;
+  if (r.mantencion) return 'mantencion';
+  const b = reservaEn(st, r.id, t);
+  if (b) return b.estado === 'en_uso' ? 'ocupado' : 'reservado';
+  if (t + st.params.tolerancia <= st.ahora) return 'pasado';
+  if (tipoDe(st, r).modalidad === 'dia' && hayCruce(st, r.id, t, st.params.cierre)) return 'bloqueado';
+  return 'libre';
+}
+/** Estado actual del recurso (lo que muestra la tarjeta). */
+function estadoRecurso(st, r){
+  if (r.mantencion) return 'mantencion';
+  if (st.reservas.some(b => b.recurso === r.id && b.estado === 'en_uso')) return 'ocupado';
+  if (reservaEn(st, r.id, st.ahora)) return 'reservado';
+  return 'libre';
+}
+/** Cupo usado hoy por un estudiante en un tipo: horas (modalidad hora) o préstamos (modalidad día). */
+function cupoUsado(st, correo, tipo){
+  const mias = st.reservas.filter(b => b.correo === correo && recurso(st, b.recurso).tipo === tipo && ['reservada','en_uso','completada'].includes(b.estado));
+  return st.tipos[tipo].modalidad === 'dia' ? mias.length : mias.reduce((a, b) => a + (b.fin - b.inicio) / 60, 0);
+}
+/** Valida una reserva. Devuelve null si es válida o el mensaje del error. */
+function validarReserva(st, correo, r, ini, fin){
+  const T = tipoDe(st, r);
+  if (r.mantencion) return `${r.nombre} está en mantención y no se puede reservar.`;
+  if (ini < st.params.apertura || fin > st.params.cierre || fin <= ini) return 'El horario está fuera del horario de atención.';
+  if (ini + st.params.tolerancia <= st.ahora) return 'Ese bloque ya pasó.';
+  if (hayCruce(st, r.id, ini, fin)) return 'Ese bloque ya no está disponible.';
+  const suma = T.modalidad === 'dia' ? 1 : (fin - ini) / 60;
+  const usado = cupoUsado(st, correo, r.tipo);
+  if (usado + suma > T.maximo){
+    return T.modalidad === 'dia'
+      ? `Ya tienes ${T.nombre.toLowerCase()} reservada hoy. El máximo es ${T.maximo} por día.`
+      : `Superarías el máximo de ${T.maximo} h diarias de ${T.plural.toLowerCase()}. Te quedan ${Math.max(0, T.maximo - usado)} h.`;
+  }
+  const choque = st.reservas.find(b => b.correo === correo && activa(b) && recurso(st, b.recurso).tipo === r.tipo && b.inicio < fin && ini < b.fin);
+  if (choque) return `Ya tienes ${recurso(st, choque.recurso).nombre} en ese horario. No se permiten dos recursos del mismo tipo a la vez.`;
+  return null;
+}
+/** Horas seguidas que se pueden pedir desde la hora h (respeta cupo y bloques libres). */
+function duracionMaxima(st, correo, r, h){
+  const T = tipoDe(st, r);
+  if (T.modalidad === 'dia') return validarReserva(st, correo, r, h * 60, st.params.cierre) ? 0 : 1;
+  const resto = T.maximo - cupoUsado(st, correo, r.tipo);
+  let k = 0;
+  while (k < resto && (h + k) * 60 < st.params.cierre && estadoBloque(st, r, h + k) === 'libre') k++;
+  return k;
+}
+function proximoLibre(st, r){
+  for (let h = Math.max(Math.floor(st.ahora / 60), st.params.apertura / 60); h < st.params.cierre / 60; h++) if (estadoBloque(st, r, h) === 'libre') return h * 60;
+  return null;
+}
+/** Liberación automática: reservas no retiradas dentro de la tolerancia pasan a "expirada". */
+function vencerReservas(st){
+  const vencidas = [];
+  st.reservas.forEach(b => {
+    if (b.estado === 'reservada' && st.ahora >= b.inicio + st.params.tolerancia){
+      b.estado = 'expirada'; vencidas.push(b);
+      registrar(st, 'Liberación automática', b.nombre, recurso(st, b.recurso).nombre, `No retiró en ${st.params.tolerancia} min`);
+      avisar(st, b.correo, `Tu reserva de ${recurso(st, b.recurso).nombre} (${hhmm(b.inicio)}) se canceló porque no retiraste el recurso en ${st.params.tolerancia} min.`);
+    }
+  });
+  return vencidas;
+}
+/** Registro de auditoría: solo se agregan eventos, nunca se editan ni borran. */
+function registrar(st, accion, usuario, rec, detalle = ''){ st.eventos.unshift(Object.freeze({n: st.eventos.length + 1, t: st.ahora, accion, usuario, recurso: rec, detalle})); }
+function avisar(st, correo, msg){ st.avisos.unshift({t: st.ahora, correo, msg}); }
+
+/* =====================================================================
+   5. ACCIONES (cada una guarda el estado)
+   ===================================================================== */
+const App = {st: null, user: null, tab: null, filtro: 'all', q: '', filtroLog: 'all', dlg: null, vivo: null};
+const S = () => App.st;
+
+const Acciones = {
+  login(correo, clave){
+    correo = (correo || '').trim().toLowerCase();
+    const m = correo.match(/^([a-z0-9._-]+)@(alumnos\.)?santotomas\.cl$/);
+    if (!m){ registrar(S(), 'Acceso rechazado (usuario externo)', correo || '(vacío)', '—'); return {error: 'Acceso solo para la comunidad Santo Tomás. Usa tu correo institucional.'}; }
+    if (clave !== undefined && !clave) return {error: 'Ingresa tu contraseña institucional.'};
+    const alumno = !!m[2];
+    if (alumno && m[1].startsWith('inactivo')){ registrar(S(), 'Acceso rechazado (matrícula no vigente)', correo, '—'); return {error: 'No encontramos una matrícula activa para esta cuenta. Contacta a tu Escuela.'}; }
+    const rol = alumno ? 'estudiante' : (m[1].startsWith('admin') ? 'admin' : 'meson');
+    App.user = {correo, nombre: nombreDesdeCorreo(correo) || correo, rol};
+    registrar(S(), 'Inicio de sesión SSO', App.user.nombre, '—', rol);
+    guardar(); return {ok: true};
+  },
+  reservar(idRec, h, horas){
+    const st = S(), r = recurso(st, idRec), T = tipoDe(st, r), u = App.user;
+    const ini = h * 60, fin = T.modalidad === 'dia' ? st.params.cierre : (h + horas) * 60;
+    const err = validarReserva(st, u.correo, r, ini, fin);
+    if (err) return {error: err};
+    const b = {id: st.seq++, recurso: r.id, correo: u.correo, nombre: u.nombre, inicio: ini, fin, estado: 'reservada', codigo: nuevoCodigo(st)};
+    st.reservas.push(b);
+    registrar(st, 'Reserva creada', u.nombre, r.nombre, `${hhmm(ini)}–${hhmm(fin)}`);
+    avisar(st, u.correo, `Comprobante: ${r.nombre}, ${hhmm(ini)}–${hhmm(fin)}, código ${b.codigo}. Retira en el mesón antes de las ${hhmm(ini + st.params.tolerancia)}.`);
+    guardar(); return {ok: true, reserva: b};
+  },
+  cancelar(idRes){
+    const st = S(), b = st.reservas.find(x => x.id === idRes);
+    if (!b || b.estado !== 'reservada') return {error: 'La reserva no se puede cancelar.'};
+    if (st.ahora >= b.inicio) return {error: 'Solo puedes cancelar antes de la hora de inicio.'};
+    b.estado = 'cancelada';
+    registrar(st, 'Reserva cancelada', b.nombre, recurso(st, b.recurso).nombre, `${hhmm(b.inicio)}–${hhmm(b.fin)}`);
+    avisar(st, b.correo, `Cancelaste ${recurso(st, b.recurso).nombre} (${hhmm(b.inicio)}). El recurso quedó libre.`);
+    guardar(); return {ok: true};
+  },
+  entregar(idRes, valor){
+    const st = S(), b = st.reservas.find(x => x.id === idRes);
+    if (!b || b.estado !== 'reservada') return {error: 'La reserva no está pendiente de retiro.'};
+    if (st.ahora < b.inicio) return {error: 'El bloque aún no comienza.'};
+    const v = (valor || '').trim().toUpperCase(), porCodigo = v === b.codigo, porMat = v === matricula(b.correo);
+    if (!porCodigo && !porMat) return {error: 'El código o la matrícula no coincide con esta reserva.'};
+    b.estado = 'en_uso';
+    registrar(st, 'Entrega registrada en mesón', b.nombre, recurso(st, b.recurso).nombre, porCodigo ? 'Validada con código' : `Validada con matrícula ****${matricula(b.correo).slice(-4)}`);
+    guardar(); return {ok: true};
+  },
+  devolver(idRes){
+    const st = S(), b = st.reservas.find(x => x.id === idRes);
+    if (!b || b.estado !== 'en_uso') return {error: 'El recurso no está prestado.'};
+    b.estado = 'completada';
+    registrar(st, 'Devolución registrada en mesón', b.nombre, recurso(st, b.recurso).nombre);
+    guardar(); return {ok: true};
+  },
+  avanzar(min){ const st = S(); st.ahora = Math.min(st.ahora + min, 1260); const v = vencerReservas(st); guardar(); return {ok: true, vencidas: v.length}; },
+  mantencion(idRec, on){
+    const st = S(), r = recurso(st, idRec);
+    if (on && st.reservas.some(b => b.recurso === idRec && b.estado === 'en_uso')) return {error: `${r.nombre} está prestado. Registra la devolución primero.`};
+    r.mantencion = !!on;
+    registrar(st, on ? 'Recurso en mantención' : 'Recurso habilitado', App.user ? App.user.nombre : 'Sistema', r.nombre);
+    guardar(); return {ok: true};
+  },
+  agregarTipo(nombre, unidades, modalidad, maximo){
+    const st = S(); nombre = (nombre || '').trim();
+    if (!nombre) return {error: 'Escribe un nombre.'};
+    const clave = 'x' + st.seq++;
+    st.tipos[clave] = {nombre, plural: /s$/i.test(nombre) ? nombre : nombre + 's', modalidad, maximo: Math.max(1, maximo), prefijo: nombre, icono: 'gen'};
+    for (let i = 1; i <= unidades; i++) st.recursos.push({id: st.seq++, tipo: clave, nombre: `${nombre} ${i}`, lugar: 'Retiro en mesón', mantencion: false});
+    registrar(st, 'Tipo de recurso agregado', App.user.nombre, nombre, `${unidades} unidades`);
+    guardar(); return {ok: true};
+  },
+  maximo(tipo, v){ const st = S(); st.tipos[tipo].maximo = Math.max(1, Math.min(12, v)); registrar(st, 'Parámetro actualizado', App.user.nombre, st.tipos[tipo].nombre, `Máximo ${st.tipos[tipo].maximo}`); guardar(); return {ok: true}; },
+  tolerancia(v){ const st = S(); st.params.tolerancia = Math.max(5, Math.min(60, v)); registrar(st, 'Parámetro actualizado', App.user.nombre, 'Tolerancia', `${st.params.tolerancia} min`); guardar(); return {ok: true}; },
+  reiniciar(){ Almacen.borrar(); App.st = estadoInicial(); guardar(); return {ok: true}; },
+  salir(){ App.user = null; App.dlg = null; setVivo(false); guardar(); }
+};
+function guardar(){ Almacen.guardar(Object.assign({}, App.st, {sesion: App.user})); }
+
+/* =====================================================================
+   6. VISTAS
+   ===================================================================== */
+const ICONOS = {
+  box:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 20v-5h4v5"/>',
+  calc:'<rect x="5" y="3" width="14" height="18" rx="2"/><rect x="8" y="6" width="8" height="3"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 17h.01M12 17h.01M15.5 17h.01"/>',
+  tab:'<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M11 18h2"/>',
+  gen:'<rect x="4" y="6" width="16" height="10" rx="1.5"/><path d="M2 19h20"/>'
+};
+const icono = k => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONOS[k] || ICONOS.gen}</svg></span>`;
+const logo = (s = 34) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="16" fill="var(--brand)"/><rect x="15" y="17" width="34" height="34" rx="7" fill="none" stroke="var(--brand-ink)" stroke-width="3.5"/><path d="M15 27h34M24 12v9M40 12v9" stroke="var(--brand-ink)" stroke-width="3.5" stroke-linecap="round"/><path d="M24 38l5 5 11-11" stroke="var(--accent)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const oscuro = () => document.documentElement.dataset.theme === 'dark';
+const btnTema = () => `<button class="btn sm" data-act="tema" aria-label="Cambiar tema">${oscuro() ? '☀ Modo claro' : '☾ Modo oscuro'}</button>`;
+const ROL = {estudiante: 'Estudiante · matrícula activa', meson: 'Personal de mesón', admin: 'Administración de biblioteca'};
+
+function pestañas(){
+  return {estudiante: [['disponibilidad','Disponibilidad'],['mis-reservas','Mis reservas']],
+          meson: [['meson','Mesón'],['disponibilidad','Disponibilidad']],
+          admin: [['admin','Administración'],['meson','Mesón'],['disponibilidad','Disponibilidad']]}[App.user.rol];
+}
+
+function vistaLogin(){
+  return `<div class="wrap"><div class="row" style="justify-content:flex-end;padding-top:14px">${btnTema()}</div>
+  <section class="login">
+    <div>
+      <div class="brand">${logo(42)}<div>MiTurno ST<small>Biblioteca Santo Tomás · Sede La Serena</small></div></div>
+      <div class="hero-band"></div>
+      <h1>Revisa qué hay libre antes de salir de casa.</h1>
+      <p class="lead" style="margin-top:14px">Boxes de estudio, calculadoras y tablets con su estado al momento. Reserva por bloque y retira en el mesón.</p>
+      <ul class="vals">
+        <li><span class="k">1</span><div><b>Disponibilidad en tiempo real</b><span class="muted">Libre, reservado u ocupado, según lo que registra el mesón.</span></div></li>
+        <li><span class="k">2</span><div><b>Reglas claras y equitativas</b><span class="muted">Hasta 2 h diarias de box y una calculadora o tablet por día.</span></div></li>
+        <li><span class="k">3</span><div><b>15 minutos de tolerancia</b><span class="muted">Si no retiras a tiempo, el recurso se libera para otra persona.</span></div></li>
+      </ul>
+    </div>
+    <form class="card sso" id="formLogin" novalidate>
+      <h3>Ingresa con tu cuenta institucional</h3>
+      <label>Correo institucional<input id="correo" type="email" autocomplete="username" placeholder="nombre.apellido@alumnos.santotomas.cl"></label>
+      <label>Contraseña<input id="clave" type="password" autocomplete="current-password" placeholder="Credenciales Santo Tomás"></label>
+      <div class="err" id="errLogin" role="alert"></div>
+      <button class="btn pri" type="submit">Ingresar con SSO</button>
+      <p class="sub">Inicio de sesión único <b>simulado</b>. En la versión real, la autenticación la hace el SSO de Santo Tomás y este portal no guarda contraseñas.</p>
+      <div class="demo-acc"><h4>Cuentas de demostración</h4>
+        ${CUENTAS_DEMO.map(c => `<button type="button" class="btn sm" data-act="demo" data-correo="${c.correo}">${c.etiqueta}</button>`).join('')}
+      </div>
+    </form>
+  </section></div>`;
+}
+
+function cabecera(){
+  const u = App.user, st = S();
+  const activas = u.rol === 'estudiante' ? st.reservas.filter(b => b.correo === u.correo && activa(b)).length : 0;
+  return `<header class="top"><div class="wrap bar">
+    <div class="brand">${logo(32)}<div>MiTurno ST<small>Biblioteca · Sede La Serena</small></div></div>
+    <nav class="tabs" aria-label="Secciones">${pestañas().map(([k, l]) => `<button data-act="tab" data-v="${k}" ${App.tab === k ? 'aria-current="page"' : ''}>${l}${k === 'mis-reservas' && activas ? `<span class="badge">${activas}</span>` : ''}</button>`).join('')}</nav>
+    <div class="who">${btnTema()}<span class="name"><b>${esc(u.nombre)}</b><br>${ROL[u.rol]}</span><button class="btn sm" data-act="salir">Salir</button></div>
+  </div></header>
+  <div class="demo"><div class="wrap">
+    <span class="live">Sincronizado con el mesón</span>
+    <span class="muted">Hora simulada</span><span class="clock tn" id="reloj">${hhmm(st.ahora)}</span>
+    <button class="btn sm" data-act="avanzar" data-v="15">+15 min</button><button class="btn sm" data-act="avanzar" data-v="60">+1 h</button>
+    <button class="btn sm" data-act="vivo" aria-pressed="${!!App.vivo}">${App.vivo ? 'Pausar' : 'Tiempo acelerado'}</button>
+    <span class="sp"></span><button class="btn sm ghost" data-act="reiniciar">Reiniciar demo</button>
+  </div></div>`;
+}
+
+function vistaDisponibilidad(){
+  const st = S(), lector = App.user.rol !== 'estudiante';
+  const tipos = Object.entries(st.tipos);
+  const resumen = tipos.map(([k, T]) => {
+    const rs = st.recursos.filter(r => r.tipo === k), es = rs.map(r => estadoRecurso(st, r)), n = rs.length || 1;
+    const c = s => es.filter(x => x === s).length;
+    return `<button class="card sum" data-act="filtro" data-v="${k}" aria-pressed="${App.filtro === k}">
+      <div class="row">${icono(T.icono)}<span class="sub">${esc(T.plural)}</span></div>
+      <div class="n tn">${c('libre')}<span> / ${rs.length} libres</span></div>
+      <div class="meter" aria-hidden="true"><i class="f" style="width:${c('libre') / n * 100}%"></i><i class="h" style="width:${c('reservado') / n * 100}%"></i><i class="b" style="width:${c('ocupado') / n * 100}%"></i></div>
+    </button>`;
+  }).join('');
+  const horas = []; for (let h = st.params.apertura / 60; h < st.params.cierre / 60; h++) horas.push(h);
+  const ET = {libre:'Libre', reservado:'Reservado', ocupado:'Ocupado', bloqueado:'No disponible', mantencion:'En mantención', pasado:'Bloque pasado'};
+  const tarjetas = st.recursos.filter(r => App.filtro === 'all' || r.tipo === App.filtro).map(r => {
+    const T = tipoDe(st, r), e = estadoRecurso(st, r), nl = proximoLibre(st, r);
+    const bloques = horas.map(h => {
+      const s = estadoBloque(st, r, h), puede = s === 'libre' && !lector;
+      return `<button class="blk st-${s === 'pasado' ? 'libre' : s} ${s === 'pasado' ? 'pasado' : ''}" ${puede ? `data-act="elegir" data-res="${r.id}" data-h="${h}"` : 'disabled'} aria-label="${esc(r.nombre)} ${hhmm(h * 60)}: ${ET[s]}" title="${ET[s]}">${hhmm(h * 60)}</button>`;
+    }).join('');
+    return `<article class="card rcard">
+      <div class="row">${icono(T.icono)}<div style="flex:1;min-width:0"><h4>${esc(r.nombre)}</h4><div class="sub">${esc(r.lugar)}</div></div><span class="pill st-${e}">${ET[e]}</span></div>
+      <div class="sub">${T.modalidad === 'dia' ? `Elige la hora de retiro; el préstamo dura hasta las ${hhmm(st.params.cierre)}.` : 'Elige un bloque de 1 hora.'}</div>
+      <div class="blocks" role="group" aria-label="Bloques de ${esc(r.nombre)}">${bloques}</div>
+      <div class="foot"><span>${r.mantencion ? 'Fuera de servicio temporalmente' : e === 'libre' ? 'Disponible ahora' : nl !== null ? 'Próximo bloque libre: ' + hhmm(nl) : 'Sin bloques libres hoy'}</span><span>${T.modalidad === 'dia' ? `Máx. ${T.maximo} por día` : `Máx. ${T.maximo} h al día`}</span></div>
+    </article>`;
+  }).join('');
+  return `<div class="page-h"><div><h2>Disponibilidad de recursos</h2><p>${lector ? 'Vista de solo lectura, igual a la que ven los estudiantes.' : 'Elige un bloque libre para reservar. El estado cambia cuando el mesón registra entregas y devoluciones.'}</p></div>
+    <div class="legend"><span class="pill st-libre">Libre</span><span class="pill st-reservado">Reservado</span><span class="pill st-ocupado">Ocupado</span><span class="pill st-mantencion">Mantención</span></div></div>
+    <div class="grid g-types">${resumen}</div>
+    <div class="toolbar"><button class="chip" data-act="filtro" data-v="all" aria-pressed="${App.filtro === 'all'}">Todos</button>${tipos.map(([k, T]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${App.filtro === k}">${esc(T.plural)}</button>`).join('')}</div>
+    <div class="grid g-res">${tarjetas}</div>
+    <div class="note">El catálogo de libros no está aquí: se consulta en <a href="https://descubridor.santotomas.cl" target="_blank" rel="noopener">descubridor.santotomas.cl</a>.</div>`;
+}
+
+function vistaMisReservas(){
+  const st = S(), u = App.user;
+  const cupos = Object.entries(st.tipos).map(([k, T]) => {
+    const usado = cupoUsado(st, u.correo, k), pct = Math.min(100, usado / T.maximo * 100);
+    const unidad = T.modalidad === 'dia' ? 'préstamo(s)' : 'h';
+    return `<div class="card quota"><div class="row"><b style="flex:1">${esc(T.plural)}</b><span class="tn muted">${usado} de ${T.maximo} ${unidad}</span></div><div class="bar2"><i style="width:${pct}%"></i></div><div class="sub">${T.modalidad === 'dia' ? `${T.maximo === 1 ? 'Un préstamo' : T.maximo + ' préstamos'} de ${esc(T.nombre.toLowerCase())} por día` : 'Cupo diario por estudiante'}</div></div>`;
+  }).join('');
+  const mias = st.reservas.filter(b => b.correo === u.correo).sort((a, b) => (activa(b) - activa(a)) || a.inicio - b.inicio);
+  const filas = mias.map(b => {
+    const r = recurso(st, b.recurso);
+    let info = '';
+    if (b.estado === 'reservada') info = st.ahora < b.inicio ? `Comienza en ${b.inicio - st.ahora} min. Puedes cancelar sin costo.` : `Retira antes de las ${hhmm(b.inicio + st.params.tolerancia)} (quedan ${b.inicio + st.params.tolerancia - st.ahora} min).`;
+    else if (b.estado === 'en_uso') info = `Devuélvelo en el mesón antes de las ${hhmm(b.fin)}.`;
+    else if (b.estado === 'expirada') info = 'El recurso se liberó automáticamente.';
+    return `<div class="item">${icono(tipoDe(st, r).icono)}<div class="main"><b>${esc(r.nombre)}</b> <span class="muted tn">· ${hhmm(b.inicio)}–${hhmm(b.fin)}</span>${activa(b) ? ` <span class="tag st-info tn">${b.codigo}</span>` : ''}<div class="sub">${info}</div></div><span class="pill ${CLASE[b.estado]}">${ETIQUETA[b.estado]}</span>${b.estado === 'reservada' ? `<button class="btn sm danger" data-act="cancelar" data-id="${b.id}" ${st.ahora >= b.inicio ? 'disabled title="Solo antes de la hora de inicio"' : ''}>Cancelar</button>` : ''}</div>`;
+  }).join('');
+  const avisos = st.avisos.filter(a => a.correo === u.correo).slice(0, 8).map(a => `<div class="item"><span class="muted tn" style="min-width:44px">${hhmm(a.t)}</span><div class="main">${esc(a.msg)}</div></div>`).join('');
+  return `<div class="page-h"><div><h2>Mis reservas</h2><p>Máximo ${st.tipos.box.maximo} h diarias de boxes, una calculadora y una tablet por día, y ${st.params.tolerancia} minutos de tolerancia para retirar.</p></div></div>
+    <div class="grid g-types">${cupos}</div>
+    <div class="grid g-2">
+      <section class="card"><div class="pad"><h3 style="font-size:17px">Reservas de hoy</h3></div><div class="list">${filas || '<div class="empty">Aún no tienes reservas. Ve a Disponibilidad y elige un bloque libre.</div>'}</div></section>
+      <section class="card"><div class="pad"><h3 style="font-size:17px">Correo institucional (simulado)</h3></div><div class="list">${avisos || '<div class="empty">Aquí verás los comprobantes y avisos que se envían a tu correo.</div>'}</div></section>
+    </div>`;
+}
+
+function vistaMeson(){
+  const st = S(), q = App.q.toLowerCase();
+  const filas = st.reservas.filter(b => activa(b) || st.ahora - b.inicio < 240)
+    .filter(b => !q || `${b.nombre} ${b.correo} ${recurso(st, b.recurso).nombre} ${b.codigo}`.toLowerCase().includes(q))
+    .sort((a, b) => a.inicio - b.inicio).map(b => {
+      const r = recurso(st, b.recurso);
+      let accion = '';
+      if (b.estado === 'reservada') accion = `<button class="btn pri sm" data-act="entregar" data-id="${b.id}" ${st.ahora < b.inicio ? 'disabled title="El bloque aún no comienza"' : ''}>Validar y entregar</button>`;
+      if (b.estado === 'en_uso') accion = `<button class="btn sm" data-act="devolver" data-id="${b.id}">Registrar devolución</button>`;
+      const vence = b.estado === 'reservada' && st.ahora >= b.inicio ? `<div class="sub" style="color:var(--held)">Vence en ${b.inicio + st.params.tolerancia - st.ahora} min</div>` : '';
+      return `<tr><td class="tn">${hhmm(b.inicio)}–${hhmm(b.fin)}</td><td><b>${esc(r.nombre)}</b></td><td>${esc(b.nombre)}<div class="sub tn">Mat. ${matricula(b.correo)} · ${b.codigo}</div></td><td><span class="pill ${CLASE[b.estado]}">${ETIQUETA[b.estado]}</span>${vence}</td><td>${accion}</td></tr>`;
+    }).join('');
+  const inventario = st.recursos.map(r => `<span class="pill st-${estadoRecurso(st, r)}">${esc(r.nombre.replace('Calculadora', 'Calc.'))}</span>`).join(' ');
+  return `<div class="page-h"><div><h2>Panel del mesón</h2><p>Valida con el código de reserva o la matrícula, y registra entregas y devoluciones. El portal se actualiza al instante.</p></div></div>
+    <div class="note">El portal solo lee y registra el inventario de recursos no bibliográficos. No modifica el sistema bibliotecario ni el catálogo de libros.</div>
+    <section class="card"><div class="pad row" style="flex-wrap:wrap"><h3 style="font-size:17px;flex:1;min-width:160px">Reservas del día</h3><input id="buscar" type="search" placeholder="Buscar por nombre, código o recurso" value="${esc(App.q)}" style="flex:1;min-width:220px;max-width:340px" aria-label="Buscar reserva"></div>
+      <div class="tbl"><table><thead><tr><th>Horario</th><th>Recurso</th><th>Estudiante</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${filas || '<tr><td colspan="5" class="empty">No hay reservas que coincidan.</td></tr>'}</tbody></table></div></section>
+    <section class="card pad"><h3 style="font-size:17px;margin-bottom:12px">Inventario ahora</h3><div class="row" style="flex-wrap:wrap;gap:6px">${inventario}</div></section>`;
+}
+
+function vistaAdmin(){
+  const st = S(), cuenta = e => st.reservas.filter(b => b.estado === e).length;
+  const cerradas = st.reservas.filter(b => ['expirada','completada','en_uso'].includes(b.estado)).length;
+  const noShow = cerradas ? Math.round(cuenta('expirada') / cerradas * 100) : 0;
+  const barras = Object.entries(st.tipos).map(([k, T]) => {
+    const n = st.reservas.filter(b => recurso(st, b.recurso).tipo === k && b.estado !== 'cancelada').length, tot = Math.max(1, st.recursos.filter(r => r.tipo === k).length);
+    return `<div class="hbar"><span>${esc(T.plural)}</span><div class="t"><i style="width:${Math.min(100, n / tot * 100)}%"></i></div><b class="tn">${n}</b></div>`;
+  }).join('');
+  const catalogo = Object.entries(st.tipos).map(([k, T]) => `<tr><td><b>${esc(T.nombre)}</b></td><td class="tn">${st.recursos.filter(r => r.tipo === k).length}</td><td>${T.modalidad === 'dia' ? 'Por día' : 'Por hora'}</td><td><input type="number" min="1" max="12" value="${T.maximo}" data-max="${k}" aria-label="Máximo de ${esc(T.plural)}"> ${T.modalidad === 'dia' ? 'por día' : 'h/día'}</td></tr>`).join('');
+  const mant = st.recursos.map(r => `<label class="switch"><input type="checkbox" data-mant="${r.id}" ${r.mantencion ? 'checked' : ''}> ${esc(r.nombre)}</label>`).join('');
+  const fl = App.filtroLog;
+  const coincide = e => fl === 'all' || (fl === 'auto' ? e.accion.includes('automática') : e.accion.toLowerCase().includes(fl));
+  const log = st.eventos.filter(coincide).slice(0, 50).map(e => `<tr><td class="tn">${e.n}</td><td class="tn">${hhmm(e.t)}</td><td>${esc(e.accion)}</td><td>${esc(e.usuario)}</td><td>${esc(e.recurso)}</td><td class="muted">${esc(e.detalle)}</td></tr>`).join('');
+  const chip = (v, l) => `<button class="chip" data-act="filtroLog" data-v="${v}" aria-pressed="${fl === v}">${l}</button>`;
+  return `<div class="page-h"><div><h2>Administración</h2><p>Indicadores de uso, parámetros de las reglas, catálogo, mantención de recursos y registro de auditoría.</p></div></div>
+    <div class="stats">
+      <div class="card stat"><div class="sub">Reservas activas</div><div class="n tn">${cuenta('reservada') + cuenta('en_uso')}</div></div>
+      <div class="card stat"><div class="sub">Devoluciones</div><div class="n tn">${cuenta('completada')}</div></div>
+      <div class="card stat"><div class="sub">Cancelaciones</div><div class="n tn">${cuenta('cancelada')}</div></div>
+      <div class="card stat"><div class="sub">Liberaciones automáticas</div><div class="n tn">${cuenta('expirada')}</div></div>
+      <div class="card stat"><div class="sub">Tasa de no retiro</div><div class="n tn">${noShow}%</div></div>
+    </div>
+    <div class="grid g-2">
+      <section class="card pad"><h3 style="font-size:17px;margin-bottom:8px">Reservas por tipo de recurso</h3>${barras}</section>
+      <section class="card pad"><h3 style="font-size:17px;margin-bottom:12px">Parámetros</h3>
+        <div class="form-row"><label>Tolerancia de retiro (min)<input type="number" id="tolerancia" min="5" max="60" value="${st.params.tolerancia}"></label></div>
+        <p class="sub" style="margin-top:10px">Los cambios aplican a las reservas nuevas y quedan en el registro de auditoría.</p></section>
+    </div>
+    <section class="card"><div class="pad"><h3 style="font-size:17px">Catálogo de recursos</h3><p class="sub">Agregar un tipo nuevo no requiere cambiar el código: aparece de inmediato para los estudiantes.</p></div>
+      <div class="tbl"><table><thead><tr><th>Tipo</th><th>Unidades</th><th>Modalidad</th><th>Máximo por estudiante</th></tr></thead><tbody>${catalogo}</tbody></table></div>
+      <form id="formTipo" class="pad form-row" style="border-top:1px solid var(--line)">
+        <label>Nombre del tipo<input id="tNombre" required placeholder="Notebook" maxlength="24"></label>
+        <label>Unidades<input id="tUnid" type="number" min="1" max="20" value="4"></label>
+        <label>Modalidad<select id="tMod"><option value="hora">Por hora</option><option value="dia">Por día</option></select></label>
+        <label>Máximo<input id="tMax" type="number" min="1" max="12" value="2"></label>
+        <button class="btn pri" type="submit">Agregar tipo</button>
+      </form></section>
+    <section class="card pad"><h3 style="font-size:17px">Recursos en mantención</h3><p class="sub" style="margin:4px 0 12px">Marca un recurso dañado o perdido para que no se pueda reservar hasta regularizarlo.</p><div class="row" style="flex-wrap:wrap;gap:8px 18px">${mant}</div></section>
+    <section class="card"><div class="pad row" style="flex-wrap:wrap"><h3 style="font-size:17px;flex:1;min-width:200px">Registro de auditoría</h3>${chip('all','Todo')}${chip('reserva','Reservas')}${chip('cancel','Cancelaciones')}${chip('auto','Liberaciones')}${chip('registrada','Mesón')}${chip('acceso','Accesos')}<button class="btn sm" data-act="exportar">Exportar CSV</button></div>
+      <div class="tbl"><table><thead><tr><th>N.º</th><th>Hora</th><th>Evento</th><th>Usuario</th><th>Recurso</th><th>Detalle</th></tr></thead><tbody>${log || '<tr><td colspan="6" class="empty">Sin eventos para este filtro.</td></tr>'}</tbody></table></div>
+      <p class="sub pad">Registro de solo agregado: los eventos no se editan ni se borran desde la interfaz.</p></section>`;
+}
+
+function vistaModal(){
+  const d = App.dlg, st = S(); if (!d) return '';
+  if (d.tipo === 'hecha'){
+    const b = st.reservas.find(x => x.id === d.id), r = recurso(st, b.recurso);
+    return `<div class="scrim" data-act="cerrar-fondo"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+      <div class="row">${logo(40)}<h3 id="mt">Reserva confirmada</h3></div>
+      <div class="ticket"><div class="sub">Código de reserva</div><div class="code tn">${b.codigo}</div></div>
+      <dl class="kv"><dt>Recurso</dt><dd>${esc(r.nombre)}</dd><dt>Horario</dt><dd class="tn">${hhmm(b.inicio)}–${hhmm(b.fin)}</dd><dt>Retira antes de</dt><dd class="tn">${hhmm(b.inicio + st.params.tolerancia)}</dd></dl>
+      <p class="sub">Enviamos el comprobante a ${esc(b.correo)}. Muestra el código o tu matrícula en el mesón.</p>
+      <div class="row-btn"><button class="btn" data-act="cerrar">Seguir reservando</button><button class="btn pri" data-act="ir-mias">Ver mis reservas</button></div></div></div>`;
+  }
+  if (d.tipo === 'entrega'){
+    const b = st.reservas.find(x => x.id === d.id), r = recurso(st, b.recurso);
+    return `<div class="scrim" data-act="cerrar-fondo"><form id="formEntrega" class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+      <h3 id="mt">Validar y entregar</h3>
+      <dl class="kv"><dt>Recurso</dt><dd>${esc(r.nombre)}</dd><dt>Estudiante</dt><dd>${esc(b.nombre)}</dd><dt>Bloque</dt><dd class="tn">${hhmm(b.inicio)}–${hhmm(b.fin)}</dd></dl>
+      <label style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:13px">Código de reserva o matrícula<input id="valor" autocomplete="off" placeholder="MT-XXXX o matrícula" value="${esc(d.valor || '')}"></label>
+      <div class="err" role="alert">${esc(d.error || '')}</div>
+      <div class="row-btn"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button type="submit" class="btn pri">Confirmar entrega</button></div></form></div>`;
+  }
+  const r = recurso(st, d.res), T = tipoDe(st, r), ini = d.h * 60, max = duracionMaxima(st, App.user.correo, r, d.h);
+  d.horas = Math.min(d.horas, Math.max(1, max));
+  const fin = T.modalidad === 'dia' ? st.params.cierre : ini + d.horas * 60;
+  const err = d.error || (max === 0 ? validarReserva(st, App.user.correo, r, ini, T.modalidad === 'dia' ? st.params.cierre : ini + 60) || 'No tienes cupo para este recurso hoy.' : '');
+  const dur = T.modalidad === 'hora' && max > 1 ? `<div><div class="sub" style="margin-bottom:6px">Duración</div><div class="seg">${Array.from({length: max}, (_, i) => `<button data-act="horas" data-v="${i + 1}" aria-pressed="${d.horas === i + 1}">${i + 1} h</button>`).join('')}</div></div>` : '';
+  return `<div class="scrim" data-act="cerrar-fondo"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+    <h3 id="mt">Confirmar reserva</h3>
+    <dl class="kv"><dt>Recurso</dt><dd>${esc(r.nombre)}</dd><dt>${T.modalidad === 'dia' ? 'Retiro' : 'Horario'}</dt><dd class="tn">${T.modalidad === 'dia' ? `desde las ${hhmm(ini)}` : `${hhmm(ini)}–${hhmm(fin)}`}</dd>${T.modalidad === 'dia' ? `<dt>Devolución</dt><dd class="tn">hasta las ${hhmm(fin)}</dd>` : ''}<dt>Lugar</dt><dd>${esc(r.lugar)}</dd></dl>
+    ${dur}
+    <ul class="rules"><li>Retira en el mesón antes de las ${hhmm(ini + st.params.tolerancia)}; si no, se libera.</li><li>Puedes cancelar hasta la hora de inicio.</li></ul>
+    <div class="err" role="alert">${esc(err)}</div>
+    <div class="row-btn"><button class="btn" data-act="cerrar">Volver</button><button class="btn pri" data-act="confirmar" ${max === 0 ? 'disabled' : ''}>Confirmar reserva</button></div>
+  </div></div>`;
+}
+
+function render(){
+  const ae = document.activeElement, foco = ae && ae.id ? {id: ae.id, pos: ae.selectionStart} : null;
+  let html;
+  if (!App.user) html = vistaLogin();
+  else {
+    const ok = pestañas().map(t => t[0]), h = location.hash.slice(1);
+    App.tab = ok.includes(h) ? h : ok[0];
+    const vista = {disponibilidad: vistaDisponibilidad, 'mis-reservas': vistaMisReservas, meson: vistaMeson, admin: vistaAdmin}[App.tab];
+    html = cabecera() + `<div class="wrap"><main>${vista()}</main><footer class="fine">MiTurno ST · prototipo v${VERSION}. Datos y personas ficticias. El tratamiento de datos personales se diseña conforme a la Ley N.º 19.628 y a los principios de la Ley N.º 21.719.</footer></div>` + vistaModal();
+  }
+  $('#app').innerHTML = html;
+  if (foco){ const el = document.getElementById(foco.id); if (el){ el.focus(); try { el.setSelectionRange(foco.pos, foco.pos); } catch(e){} } }
+}
+function aviso(msg){ const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3500); }
+function setVivo(on){ clearInterval(App.vivo); App.vivo = on ? setInterval(() => { if (!App.dlg){ Acciones.avanzar(5); render(); } }, 2000) : null; }
+function exportarCSV(){
+  const filas = [['n','hora','evento','usuario','recurso','detalle'], ...S().eventos.slice().reverse().map(e => [e.n, hhmm(e.t), e.accion, e.usuario, e.recurso, e.detalle])];
+  const csv = filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type: 'text/csv'})); a.download = 'auditoria_miturnost.csv'; a.click();
+}
+
+/* =====================================================================
+   7. EVENTOS Y ARRANQUE
+   ===================================================================== */
+function accion(a, el){
+  const id = +el.dataset.id, u = App.user;
+  const res = (r, ok) => { if (r.error){ aviso(r.error); } else if (ok){ aviso(ok); } render(); };
+  switch (a){
+    case 'demo': { const r = Acciones.login(el.dataset.correo); if (r.error){ $('#errLogin').textContent = r.error; return; } location.hash = pestañas()[0][0]; return render(); }
+    case 'tab': location.hash = el.dataset.v; return;
+    case 'salir': Acciones.salir(); history.replaceState(null, '', location.pathname); return render();
+    case 'tema': document.documentElement.dataset.theme = oscuro() ? 'light' : 'dark'; try { localStorage.setItem('miturnost.tema', document.documentElement.dataset.theme); } catch(e){} return render();
+    case 'filtro': App.filtro = el.dataset.v; return render();
+    case 'filtroLog': App.filtroLog = el.dataset.v; return render();
+    case 'elegir': App.dlg = {tipo: 'reserva', res: +el.dataset.res, h: +el.dataset.h, horas: 1}; return render();
+    case 'horas': App.dlg.horas = +el.dataset.v; App.dlg.error = ''; return render();
+    case 'confirmar': { const r = Acciones.reservar(App.dlg.res, App.dlg.h, App.dlg.horas); if (r.error){ App.dlg.error = r.error; return render(); } App.dlg = {tipo: 'hecha', id: r.reserva.id}; render(); return aviso('Reserva confirmada. Comprobante enviado a tu correo.'); }
+    case 'cerrar': App.dlg = null; return render();
+    case 'ir-mias': App.dlg = null; location.hash = 'mis-reservas'; return render();
+    case 'cancelar': return res(Acciones.cancelar(id), 'Reserva cancelada. El recurso quedó libre.');
+    case 'entregar': App.dlg = {tipo: 'entrega', id, valor: '', error: ''}; return render();
+    case 'devolver': return res(Acciones.devolver(id), 'Devolución registrada.');
+    case 'avanzar': { const r = Acciones.avanzar(+el.dataset.v); return res(r, r.vencidas ? `${r.vencidas} reserva(s) liberada(s) automáticamente.` : ''); }
+    case 'vivo': setVivo(!App.vivo); return render();
+    case 'reiniciar': { const sesion = u; Acciones.reiniciar(); App.user = sesion; guardar(); return res({}, 'Demo reiniciada a las 10:10.'); }
+    case 'exportar': return exportarCSV();
+  }
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  if (el.dataset.act === 'cerrar-fondo'){ if (e.target === el){ App.dlg = null; render(); } return; }
+  e.preventDefault(); accion(el.dataset.act, el);
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'buscar'){ App.q = e.target.value; render(); }
+  if (e.target.id === 'valor' && App.dlg) App.dlg.valor = e.target.value;
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.max){ Acciones.maximo(t.dataset.max, +t.value || 1); render(); aviso('Máximo actualizado.'); }
+  if (t.id === 'tolerancia'){ Acciones.tolerancia(+t.value || 15); render(); aviso('Tolerancia actualizada.'); }
+  if (t.dataset.mant){ const r = Acciones.mantencion(+t.dataset.mant, t.checked); if (r.error) aviso(r.error); render(); }
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.id === 'formLogin'){ const r = Acciones.login($('#correo').value, $('#clave').value); if (r.error){ $('#errLogin').textContent = r.error; return; } location.hash = pestañas()[0][0]; render(); }
+  if (e.target.id === 'formEntrega'){ const r = Acciones.entregar(App.dlg.id, App.dlg.valor); if (r.error){ App.dlg.error = r.error; return render(); } App.dlg = null; render(); aviso('Entrega registrada. El recurso aparece como ocupado.'); }
+  if (e.target.id === 'formTipo'){ const r = Acciones.agregarTipo($('#tNombre').value, Math.max(1, Math.min(20, +$('#tUnid').value || 1)), $('#tMod').value, +$('#tMax').value || 1); if (r.error) return aviso(r.error); render(); aviso('Tipo agregado al catálogo.'); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && App.dlg){ App.dlg = null; render(); } });
+window.addEventListener('hashchange', () => { if (App.user) render(); });
+
+(function iniciar(){
+  try { const t = localStorage.getItem('miturnost.tema'); if (t) document.documentElement.dataset.theme = t; else if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.theme = 'dark'; } catch(e){}
+  const guardado = Almacen.cargar();
+  if (guardado){ App.user = guardado.sesion || null; delete guardado.sesion; App.st = guardado; }
+  else App.st = estadoInicial();
+  render();
+})();
+
+// Interfaz para pruebas automáticas (tests/pruebas.mjs) y consola del navegador.
+window.MiTurno = {Acciones, estado: S, app: App, reglas: {estadoBloque, estadoRecurso, cupoUsado, validarReserva, duracionMaxima, vencerReservas, matricula}, render};
+</script>
+</body>
+</html>
