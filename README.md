@@ -86,5 +86,3 @@ Una "máscara" web que **no modifica** el sistema bibliotecario y muestra el est
 | Julián Ojeda | Gerente de Proyecto / Scrum Master · UI/UX y Frontend · QA y Capacitación |
 | Benjamín Santander | Arquitecto de Sistemas y Seguridad · Backend · QA |
 | Martín Araya | Administrador de Bases de Datos · Backend e Integración |
-
-Asignatura: Gestión de Proyectos y Equipos de Trabajo · Docente: Paola Celis Lagos
